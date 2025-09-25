@@ -1,0 +1,63 @@
+name: Build tools
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install EDK2 dependencies
+        run: sudo apt install build-essential git uuid-dev iasl nasm
+
+      - uses: actions/checkout@v4
+        with:
+          path: edk2
+          submodules: recursive
+          repository: tianocore/edk2
+          # TODO: Try to update
+          ref: edk2-stable202211
+
+      - name: Build BaseTools
+        run: |
+          make -C edk2/BaseTools
+
+      - name: Build EDK2 packages
+        run: |
+          cd edk2
+          source edksetup.sh
+          # Make sure EDK2 build can work
+          build -a X64 -b RELEASE -t GCC5 -p MdeModulePkg/MdeModulePkg.dsc
+
+      # Can cache until here. Invalidate on new edk2 release
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          path: CrScreenshotDxe
+
+      - name: Symlink this repo into edk2
+        run: |
+          ln -s $(pwd)/CrScreenshotDxe $(pwd)/edk2/
+
+      - name: Build CrScreenshotDxe
+        run: |
+          pwd
+          ls -l
+          cd edk2
+          source edksetup.sh
+          build -p CrScreenshotDxe/CrScreenshotDxe.dsc -a X64 -b RELEASE -t GCC5
+
+      - name: What's going on
+        run: |
+          pwd
+          ls -l
+          ls -l edk2
+          ls -l CrScreenshotDxe
+
+      - name: Upload CrScreenshotDxe.efi
+        uses: actions/upload-artifact@v4
+        with:
+          name: CrScreenshotDxe.efi
+          path: edk2/Build/CrScreenshotDxe/RELEASE_GCC5/X64/CrScreenshotDxe.efi
